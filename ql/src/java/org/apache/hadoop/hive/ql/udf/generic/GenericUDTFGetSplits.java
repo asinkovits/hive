@@ -26,11 +26,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import javax.security.auth.login.LoginException;
 
@@ -457,7 +453,7 @@ public class GenericUDTFGetSplits extends GenericUDTF {
       // why this is done.
       HiveConf.setVar(wxConf, HiveConf.ConfVars.HIVEQUERYID, applicationId.toString());
       Vertex wx = utils.createVertex(wxConf, mapWork, scratchDir, work,
-          DagUtils.createTezLrMap(appJarLr, null));
+          DagUtils.createTezLrMap(Collections.singleton(appJarLr), null));
       String vertexName = wx.getName();
       dag.addVertex(wx);
       utils.addCredentials(mapWork, dag);

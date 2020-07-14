@@ -23,13 +23,7 @@ import org.apache.hadoop.registry.client.api.RegistryOperations;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -110,7 +104,7 @@ public class TezSessionState {
 
   private final HiveConf conf;
   private Path tezScratchDir;
-  private LocalResource[] appJarLrs;
+  private Collection<LocalResource> appJarLrs;
   private TezClient session;
   private Future<TezClient> sessionFuture;
   /** Console used for user feedback during async session opening. */
@@ -290,10 +284,9 @@ public class TezSessionState {
     // unless already installed on all the cluster nodes, we'll have to
     // localize hive-exec.jar and hive-parse.jar as well.
     String[] appJarPathLocal = utils.getExecJarsPathLocal(conf);
-    appJarLrs = new LocalResource[appJarPathLocal.length];
-    for (int i = 0; i < appJarPathLocal.length; i++) {
-      appJarLrs[i] = createJarLocalResource(appJarPathLocal[i]);
-      commonLocalResources.put(DagUtils.getBaseName(appJarLrs[i]), appJarLrs[i]);
+    appJarLrs = createJarLocalResources(appJarPathLocal);
+    for (LocalResource lr : appJarLrs) {
+      commonLocalResources.put(DagUtils.getBaseName(lr), lr);
     }
 
     for (LocalResource lr : this.resources.localizedResources) {
@@ -662,7 +655,7 @@ public class TezSessionState {
     // TODO: Do we really need all this nonsense?
     if (session != null) {
       if (newResources != null && !newResources.isEmpty()) {
-        session.addAppMasterLocalFiles(DagUtils.createTezLrMap(new LocalResource[0], newResources.values()));
+        session.addAppMasterLocalFiles(DagUtils.createTezLrMap(Collections.EMPTY_SET, newResources.values()));
       }
       if (!resources.localizedResources.isEmpty()) {
         session.addAppMasterLocalFiles(
@@ -769,7 +762,7 @@ public class TezSessionState {
     return session;
   }
 
-  public LocalResource[] getAppJarLrs() {
+  public Collection<LocalResource> getAppJarLrs() {
     return appJarLrs;
   }
 
@@ -798,13 +791,13 @@ public class TezSessionState {
   /**
    * Returns a local resource representing a jar.
    * This resource will be used to execute the plan on the cluster.
-   * @param localJarPath Local path to the jar to be localized.
-   * @return LocalResource corresponding to the localized hive exec resource.
+   * @param localJarPaths Local path to the jar to be localized.
+   * @return LocalResources corresponding to the localized hive exec resources.
    * @throws IOException when any file system related call fails.
    * @throws LoginException when we are unable to determine the user.
    * @throws URISyntaxException when current jar location cannot be determined.
    */
-  private LocalResource createJarLocalResource(String localJarPath)
+  private Collection<LocalResource> createJarLocalResources(String... localJarPaths)
       throws IOException, LoginException, IllegalArgumentException {
     // TODO Reduce the number of lookups that happen here. This shouldn't go to HDFS for each call.
     // The hiveJarDir can be determined once per client.
@@ -812,24 +805,22 @@ public class TezSessionState {
     assert destDirStatus != null;
     Path destDirPath = destDirStatus.getPath();
 
-    Path localFile = new Path(localJarPath);
-    String sha = getSha(localFile);
-
-    String destFileName = localFile.getName();
-
-    // Now, try to find the file based on SHA and name. Currently we require exact name match.
-    // We could also allow cutting off versions and other stuff provided that SHA matches...
-    destFileName = FilenameUtils.removeExtension(destFileName) + "-" + sha
-        + FilenameUtils.EXTENSION_SEPARATOR + FilenameUtils.getExtension(destFileName);
-
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("The destination file name for [" + localJarPath + "] is " + destFileName);
+    List<LocalResource> result = new LinkedList<>();
+    for (String localJarPath : localJarPaths) {
+      Path localFile = new Path(localJarPath);
+      String sha = getSha(localFile);
+      String destFileName = localFile.getName();
+      // Now, try to find the file based on SHA and name. Currently we require exact name match.
+      // We could also allow cutting off versions and other stuff provided that SHA matches...
+      destFileName = FilenameUtils.removeExtension(destFileName) + "-" + sha
+          + FilenameUtils.EXTENSION_SEPARATOR + FilenameUtils.getExtension(destFileName);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("The destination file name for [" + localJarPath + "] is " + destFileName);
+      }
+      Path destFile = new Path(destDirPath.toString() + "/" + destFileName);
+      result.add(utils.localizeResource(localFile, destFile, LocalResourceType.FILE, conf));
     }
-
-    // TODO: if this method is ever called on more than one jar, getting the dir and the
-    //       list need to be refactored out to be done only once.
-    Path destFile = new Path(destDirPath.toString() + "/" + destFileName);
-    return utils.localizeResource(localFile, destFile, LocalResourceType.FILE, conf);
+    return result;
   }
 
   private String getKey(final FileStatus fileStatus) {
@@ -855,7 +846,7 @@ public class TezSessionState {
     }
     final File jar = new File(jarPath);
     final String localJarPath = jar.toURI().toURL().toExternalForm();
-    final LocalResource jarLr = createJarLocalResource(localJarPath);
+    final LocalResource jarLr = createJarLocalResources(localJarPath).stream().findFirst().get();
     lrMap.put(DagUtils.getBaseName(jarLr), jarLr);
   }
 

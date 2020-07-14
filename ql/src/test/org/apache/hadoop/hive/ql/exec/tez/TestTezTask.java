@@ -56,12 +56,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -88,7 +83,7 @@ public class TestTezTask {
   TezClient session;
   TezSessionState sessionState;
   JobConf conf;
-  LocalResource appLr;
+  Collection<LocalResource> appLr;
   Operator<?> op;
   Path path;
   FileSystem fs;
@@ -290,7 +285,7 @@ public class TestTezTask {
   public void testExistingSessionGetsStorageHandlerResources() throws Exception {
     final String jarFilePath = "file:///tmp/foo.jar";
     final String[] inputOutputJars = new String[] {jarFilePath};
-    LocalResource res = createResource(inputOutputJars[0]);
+    LocalResource res = createResource(inputOutputJars).get(0);
     final Map<String, LocalResource> resources = Collections.singletonMap(jarFilePath, res);
 
     when(utils.localizeTempFiles(anyString(), any(), eq(inputOutputJars),
@@ -302,10 +297,14 @@ public class TestTezTask {
     verify(sessionState).ensureLocalResources(any(), eq(inputOutputJars));
   }
 
-  private static LocalResource createResource(String url) {
-    LocalResource res = mock(LocalResource.class);
-    when(res.getResource()).thenReturn(URL.fromPath(new Path(url)));
-    return res;
+  private static List<LocalResource> createResource(String... urls) {
+    List<LocalResource> result = new LinkedList<>();
+    for(String url : urls) {
+      LocalResource res = mock(LocalResource.class);
+      when(res.getResource()).thenReturn(URL.fromPath(new Path(url)));
+      result.add(res);
+    }
+    return result;
   }
 
   @Test

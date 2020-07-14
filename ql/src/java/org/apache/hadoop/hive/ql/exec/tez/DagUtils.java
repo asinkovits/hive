@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hive.ql.exec.tez;
 
-import java.util.Collection;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.common.base.Function;
@@ -34,15 +34,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Stack;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -915,20 +906,20 @@ public class DagUtils {
   }
 
   public static Map<String, LocalResource> createTezLrMap(
-      LocalResource appJarLrs, Collection<LocalResource> additionalLr) {
-    return createTezLrMap(new LocalResource[] {appJarLrs}, additionalLr);
+      LocalResource appJarLr, Collection<LocalResource> additionalLr) {
+    return createTezLrMap(Collections.singleton(appJarLr), additionalLr);
   }
 
   public static Map<String, LocalResource> createTezLrMap(
-      LocalResource[] appJarLrs, Collection<LocalResource> additionalLr) {
+      Collection<LocalResource> appJarLrs, Collection<LocalResource> additionalLr) {
     // Note: interestingly this would exclude LLAP app jars that the session adds for LLAP case.
     //       Of course it doesn't matter because vertices run ON LLAP and have those jars, and
     //       moreover we anyway don't localize jars for the vertices on LLAP; but in theory
     //       this is still crappy code that assumes there's one and only app jar.
     Map<String, LocalResource> localResources = new HashMap<>();
     if (appJarLrs != null) {
-      for (int i = 0; i < appJarLrs.length; i++) {
-        localResources.put(getBaseName(appJarLrs[i]), appJarLrs[i]);
+      for (LocalResource lr : appJarLrs) {
+        localResources.put(getBaseName(lr), lr);
       }
     }
     if (additionalLr != null) {
