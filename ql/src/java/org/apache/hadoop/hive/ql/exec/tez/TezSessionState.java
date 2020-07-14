@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hive.ql.exec.tez;
 
+import org.apache.hadoop.hive.ql.parse.ParseException;
 import org.apache.hadoop.registry.client.api.RegistryOperations;
 
 import java.io.File;
@@ -109,7 +110,7 @@ public class TezSessionState {
 
   private final HiveConf conf;
   private Path tezScratchDir;
-  private LocalResource appJarLr;
+  private LocalResource[] appJarLrs;
   private TezClient session;
   private Future<TezClient> sessionFuture;
   /** Console used for user feedback during async session opening. */
@@ -283,13 +284,18 @@ public class TezSessionState {
       LOG.info("Created new resources: " + resources);
     }
 
-    // unless already installed on all the cluster nodes, we'll have to
-    // localize hive-exec.jar as well.
-    appJarLr = createJarLocalResource(utils.getExecJarPathLocal(conf));
-
     // configuration for the application master
     final Map<String, LocalResource> commonLocalResources = new HashMap<String, LocalResource>();
-    commonLocalResources.put(DagUtils.getBaseName(appJarLr), appJarLr);
+
+    // unless already installed on all the cluster nodes, we'll have to
+    // localize hive-exec.jar and hive-parse.jar as well.
+    String[] appJarPathLocal = utils.getExecJarsPathLocal(conf);
+    appJarLrs = new LocalResource[appJarPathLocal.length];
+    for (int i = 0; i < appJarPathLocal.length; i++) {
+      appJarLrs[i] = createJarLocalResource(appJarPathLocal[i]);
+      commonLocalResources.put(DagUtils.getBaseName(appJarLrs[i]), appJarLrs[i]);
+    }
+
     for (LocalResource lr : this.resources.localizedResources) {
       commonLocalResources.put(DagUtils.getBaseName(lr), lr);
     }
@@ -656,7 +662,7 @@ public class TezSessionState {
     // TODO: Do we really need all this nonsense?
     if (session != null) {
       if (newResources != null && !newResources.isEmpty()) {
-        session.addAppMasterLocalFiles(DagUtils.createTezLrMap(null, newResources.values()));
+        session.addAppMasterLocalFiles(DagUtils.createTezLrMap(new LocalResource[0], newResources.values()));
       }
       if (!resources.localizedResources.isEmpty()) {
         session.addAppMasterLocalFiles(
@@ -676,7 +682,7 @@ public class TezSessionState {
    */
   void close(boolean keepDagFilesDir) throws Exception {
     console = null;
-    appJarLr = null;
+    appJarLrs = null;
 
     try {
       if (session != null) {
@@ -763,8 +769,8 @@ public class TezSessionState {
     return session;
   }
 
-  public LocalResource getAppJarLr() {
-    return appJarLr;
+  public LocalResource[] getAppJarLrs() {
+    return appJarLrs;
   }
 
   /**

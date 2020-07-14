@@ -207,7 +207,7 @@ public class TezTask extends Task<TezWork> {
         logResources(allNonAppResources);
 
         Map<String, LocalResource> allResources = DagUtils.createTezLrMap(
-            session.getAppJarLr(), allNonAppResources);
+            session.getAppJarLrs(), allNonAppResources);
 
         // next we translate the TezWork to a Tez DAG
         DAG dag = build(jobConf, work, scratchDir, ctx, allResources);

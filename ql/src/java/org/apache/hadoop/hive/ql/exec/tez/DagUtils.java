@@ -51,6 +51,7 @@ import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.hive.ql.parse.ParseException;
 import org.apache.hive.common.util.HiveStringUtils;
 import org.apache.tez.mapreduce.common.MRInputSplitDistributor;
 import org.apache.tez.mapreduce.hadoop.InputSplitInfo;
@@ -914,14 +915,21 @@ public class DagUtils {
   }
 
   public static Map<String, LocalResource> createTezLrMap(
-      LocalResource appJarLr, Collection<LocalResource> additionalLr) {
+      LocalResource appJarLrs, Collection<LocalResource> additionalLr) {
+    return createTezLrMap(new LocalResource[] {appJarLrs}, additionalLr);
+  }
+
+  public static Map<String, LocalResource> createTezLrMap(
+      LocalResource[] appJarLrs, Collection<LocalResource> additionalLr) {
     // Note: interestingly this would exclude LLAP app jars that the session adds for LLAP case.
     //       Of course it doesn't matter because vertices run ON LLAP and have those jars, and
     //       moreover we anyway don't localize jars for the vertices on LLAP; but in theory
     //       this is still crappy code that assumes there's one and only app jar.
     Map<String, LocalResource> localResources = new HashMap<>();
-    if (appJarLr != null) {
-      localResources.put(getBaseName(appJarLr), appJarLr);
+    if (appJarLrs != null) {
+      for (int i = 0; i < appJarLrs.length; i++) {
+        localResources.put(getBaseName(appJarLrs[i]), appJarLrs[i]);
+      }
     }
     if (additionalLr != null) {
       for (LocalResource lr: additionalLr) {
@@ -1201,7 +1209,22 @@ public class DagUtils {
       }
     }
     return uri.toString();
+  }
 
+  // the api that finds the jars being used by this class on disk
+  public String[] getExecJarsPathLocal(Configuration configuration) throws URISyntaxException {
+    // returns the location on disc of the jar of this class.
+
+    URI hiveExec = DagUtils.class.getProtectionDomain().getCodeSource().getLocation().toURI();
+    URI hiveParse = ParseException.class.getProtectionDomain().getCodeSource().getLocation().toURI();
+
+    if (configuration.getBoolean(ConfVars.HIVE_IN_TEST_IDE.varname, false)) {
+      if (new File(hiveExec.getPath()).isDirectory()) {
+        // IDE support for running tez jobs
+        return new String[] {createEmptyArchive().toString()};
+      }
+    }
+    return new String[]{ hiveExec.toString(), hiveParse.toString() };
   }
 
   /**
